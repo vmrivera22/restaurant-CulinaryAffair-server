@@ -1,3 +1,5 @@
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,24 +27,29 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
         });
     services.AddEndpointsApiExplorer();
 
+    var keyVaultEndpoint = new Uri(configuration["VaultKey"]);
+    var secretClient = new SecretClient(keyVaultEndpoint, new DefaultAzureCredential());
+    KeyVaultSecret authority = secretClient.GetSecret("authauth");
+    KeyVaultSecret audience = secretClient.GetSecret("authaudience");
+
     services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
         options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
     }).AddJwtBearer(options =>
     {
-        options.Authority = configuration.GetValue<string>("Auth:Authority");
-        options.Audience = configuration.GetValue<string>("Auth:Audience");
+        options.Authority = authority.Value;
+        options.Audience = audience.Value;
         options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters()
         {
             NameClaimType = ClaimTypes.NameIdentifier
         };
     });
 
-    services.AddDbContext<DataContext>(options =>
-    {
-        options.UseSqlServer(configuration.GetConnectionString("DefaultConnection"));
-    });
+
+    KeyVaultSecret kvs = secretClient.GetSecret("culinaryaffairsecret1");
+    services.AddDbContext<DataContext>(o => o.UseSqlServer(kvs.Value));
+
     services.AddScoped<IDishesRepository, InMemDishesRepository>();
     services.AddScoped<IIngredientsRepository, InMemIngredientsRepository>();
     services.AddScoped<IOrdersRepository, InMemOrderRepository>();
